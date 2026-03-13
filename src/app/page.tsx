@@ -4,7 +4,7 @@ import { curriculum } from "@/data/curriculum";
 import { useProgress } from "@/hooks/useProgress";
 import ModuleCard from "@/components/ModuleCard";
 import ProgressBar from "@/components/ProgressBar";
-import { BookOpen, Trophy, Clock, RotateCcw, Flame } from "lucide-react";
+import { BookOpen, Trophy, Clock, RotateCcw, Flame, Github, Star, GitFork, Heart } from "lucide-react";
 
 export default function Home() {
   const { loaded, getModuleProgress, getOverallProgress, resetProgress, progress } =
@@ -46,6 +46,46 @@ export default function Home() {
             Master Go from zero to production. Interactive lessons, hands-on challenges,
             and real-world projects — all with progress tracking.
           </p>
+
+          {/* GitHub Links */}
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+            <a
+              href="https://github.com/janithBimsaraUlukkulama/learn-golang-with-me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 transition-all text-sm"
+            >
+              <Github className="w-4 h-4" />
+              View on GitHub
+            </a>
+            <a
+              href="https://github.com/janithBimsaraUlukkulama/learn-golang-with-me/stargazers"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-amber-400 hover:border-amber-500/40 transition-all text-sm"
+            >
+              <Star className="w-4 h-4" />
+              Star
+            </a>
+            <a
+              href="https://github.com/janithBimsaraUlukkulama/learn-golang-with-me/fork"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-blue-400 hover:border-blue-500/40 transition-all text-sm"
+            >
+              <GitFork className="w-4 h-4" />
+              Fork
+            </a>
+            <a
+              href="https://github.com/sponsors/janithBimsaraUlukkulama"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-500/10 border border-pink-500/20 text-pink-400 hover:text-pink-300 hover:border-pink-500/40 transition-all text-sm"
+            >
+              <Heart className="w-4 h-4" />
+              Sponsor
+            </a>
+          </div>
 
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
@@ -125,10 +165,22 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Footer note */}
-        <div className="mt-12 text-center text-sm text-gray-600 pb-8">
+        {/* Footer */}
+        <div className="mt-12 text-center text-sm text-gray-600 pb-8 space-y-2">
           <p>
             Built with Next.js. Progress is saved locally in your browser.
+          </p>
+          <p>
+            Open source on{" "}
+            <a
+              href="https://github.com/janithBimsaraUlukkulama/learn-golang-with-me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-400 hover:text-white transition-colors underline underline-offset-2"
+            >
+              GitHub
+            </a>
+            {" "} — contributions welcome!
           </p>
         </div>
       </main>
