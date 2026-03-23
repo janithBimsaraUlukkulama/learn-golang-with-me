@@ -2964,4 +2964,1532 @@ func main() {
       },
     ],
   },
+  {
+    id: "design-patterns",
+    title: "Design Patterns in Go",
+    description:
+      "Master idiomatic Go design patterns — from classic Gang of Four patterns adapted for Go to Go-specific patterns like functional options and concurrency pipelines.",
+    icon: "🏗️",
+    lessons: [
+      {
+        id: "patterns-intro",
+        title: "Design Patterns & Go Philosophy",
+        description:
+          "Understand how Go's simplicity and composition-over-inheritance philosophy shapes the way design patterns are applied.",
+        content: `## Design Patterns in Go
+
+Design patterns are proven solutions to recurring software design problems. In Go, patterns look different from what you'd see in Java or C++ because Go favors:
+
+- **Composition over inheritance** — no class hierarchies
+- **Implicit interfaces** — no \`implements\` keyword
+- **First-class functions** — functions as values, closures
+- **Concurrency primitives** — goroutines and channels built into the language
+
+### Why Patterns Matter
+
+Patterns give you a shared vocabulary. When someone says "use a factory here" or "this is a pipeline pattern," everyone on the team immediately understands the structure.
+
+### How Go Changes the Game
+
+Many traditional OOP patterns become simpler in Go:
+
+| Traditional OOP | Go Approach |
+|-----------------|-------------|
+| Abstract Factory with class hierarchies | Function that returns an interface |
+| Strategy pattern with strategy interface + concrete classes | Pass a function value |
+| Observer with subscriber lists | Use channels |
+| Decorator with wrapper classes | Middleware (function wrapping) |
+| Singleton with private constructor | Package-level \`var\` + \`sync.Once\` |
+
+### Pattern Categories We'll Cover
+
+1. **Creational** — How objects are created (Factory, Builder, Singleton)
+2. **Structural** — How objects are composed (Adapter, Decorator)
+3. **Behavioral** — How objects communicate (Strategy, Observer)
+4. **Go-Specific** — Patterns unique to Go (Functional Options, Pipeline, Fan-out/Fan-in)
+
+### The Golden Rule
+
+> Don't force a pattern where it doesn't fit. Go code should be simple and readable first. Apply patterns when they genuinely reduce complexity.
+
+\`\`\`go
+// Go's interfaces make polymorphism natural
+type Writer interface {
+    Write(p []byte) (n int, err error)
+}
+
+// Anything that has a Write method satisfies Writer.
+// No "implements" keyword needed.
+// This is the foundation of most Go patterns.
+\`\`\``,
+        resources: [
+          {
+            title: "Go Proverbs — Rob Pike",
+            url: "https://go-proverbs.github.io/",
+            type: "article",
+          },
+          {
+            title: "Design Patterns in Go (refactoring.guru)",
+            url: "https://refactoring.guru/design-patterns/go",
+            type: "article",
+          },
+          {
+            title: "Effective Go",
+            url: "https://go.dev/doc/effective_go",
+            type: "docs",
+          },
+        ],
+        estimatedMinutes: 15,
+      },
+      {
+        id: "creational-patterns",
+        title: "Creational Patterns",
+        description:
+          "Learn Factory, Builder, and Singleton patterns the Go way — using functions, method chaining, and sync.Once.",
+        content: `## Creational Patterns
+
+Creational patterns control how objects are created. In Go, these are simpler than their OOP counterparts because Go doesn't have constructors or class hierarchies.
+
+---
+
+### Factory Pattern
+
+A factory is a function that returns an interface. The caller doesn't need to know the concrete type.
+
+\`\`\`go
+package notification
+
+// The interface consumers depend on
+type Notifier interface {
+    Send(to, message string) error
+}
+
+// Concrete implementations (unexported)
+type emailNotifier struct{ smtpHost string }
+type smsNotifier struct{ apiKey string }
+
+func (e *emailNotifier) Send(to, msg string) error {
+    fmt.Printf("Email to %s via %s: %s\\n", to, e.smtpHost, msg)
+    return nil
+}
+
+func (s *smsNotifier) Send(to, msg string) error {
+    fmt.Printf("SMS to %s: %s\\n", to, msg)
+    return nil
+}
+
+// Factory function — returns the interface, hides the concrete type
+func NewNotifier(channel string, config map[string]string) (Notifier, error) {
+    switch channel {
+    case "email":
+        return &emailNotifier{smtpHost: config["smtp_host"]}, nil
+    case "sms":
+        return &smsNotifier{apiKey: config["api_key"]}, nil
+    default:
+        return nil, fmt.Errorf("unknown channel: %s", channel)
+    }
+}
+\`\`\`
+
+**When to use:** When you need to create objects of different types based on configuration or input, and consumers should depend on an interface rather than a concrete type.
+
+---
+
+### Builder Pattern
+
+Builders construct complex objects step by step using method chaining.
+
+\`\`\`go
+package main
+
+import (
+    "fmt"
+    "strings"
+)
+
+type HTTPRequest struct {
+    Method  string
+    URL     string
+    Headers map[string]string
+    Body    string
+    Timeout int
+}
+
+type RequestBuilder struct {
+    request HTTPRequest
+}
+
+func NewRequestBuilder(method, url string) *RequestBuilder {
+    return &RequestBuilder{
+        request: HTTPRequest{
+            Method:  method,
+            URL:     url,
+            Headers: make(map[string]string),
+        },
+    }
+}
+
+func (b *RequestBuilder) Header(key, value string) *RequestBuilder {
+    b.request.Headers[key] = value
+    return b
+}
+
+func (b *RequestBuilder) Body(body string) *RequestBuilder {
+    b.request.Body = body
+    return b
+}
+
+func (b *RequestBuilder) Timeout(seconds int) *RequestBuilder {
+    b.request.Timeout = seconds
+    return b
+}
+
+func (b *RequestBuilder) Build() HTTPRequest {
+    return b.request
+}
+
+func main() {
+    req := NewRequestBuilder("POST", "https://api.example.com/users").
+        Header("Content-Type", "application/json").
+        Header("Authorization", "Bearer token123").
+        Body(\`{"name": "Alice"}\`).
+        Timeout(30).
+        Build()
+
+    fmt.Printf("%+v\\n", req)
+}
+\`\`\`
+
+**When to use:** When an object has many optional fields and you want a clean, readable construction API.
+
+---
+
+### Singleton Pattern
+
+Go uses package-level variables and \`sync.Once\` for singletons — no private constructors needed.
+
+\`\`\`go
+package db
+
+import (
+    "database/sql"
+    "sync"
+)
+
+var (
+    instance *sql.DB
+    once     sync.Once
+)
+
+// GetDB returns the singleton database connection.
+// The connection is created lazily on first call.
+func GetDB() *sql.DB {
+    once.Do(func() {
+        var err error
+        instance, err = sql.Open("postgres", "postgres://localhost/mydb")
+        if err != nil {
+            panic("failed to connect to database: " + err.Error())
+        }
+        instance.SetMaxOpenConns(25)
+    })
+    return instance
+}
+\`\`\`
+
+**When to use:** For shared resources like database connections, loggers, or configuration that should be initialized once.
+
+> **Warning:** Singletons make testing harder because they introduce global state. Prefer dependency injection where possible — pass the dependency as a parameter instead.`,
+        challenge:
+          "Build a vehicle factory: Create a `Vehicle` interface with `Describe() string`. Implement `Car`, `Truck`, and `Motorcycle` types. Write a `NewVehicle(vehicleType string) (Vehicle, error)` factory function. Then create a `VehicleBuilder` that lets you chain `.Color()`, `.Engine()`, `.Seats()` before calling `.Build()`.",
+        challengeHint:
+          "Start with the interface, then implement each vehicle type as an unexported struct. The factory function switches on the vehicleType string. For the builder, store fields in the builder struct and construct the vehicle in Build().",
+        resources: [
+          {
+            title: "Factory Pattern in Go",
+            url: "https://refactoring.guru/design-patterns/factory-method/go/example",
+            type: "article",
+          },
+          {
+            title: "Builder Pattern in Go",
+            url: "https://refactoring.guru/design-patterns/builder/go/example",
+            type: "article",
+          },
+          {
+            title: "sync.Once Documentation",
+            url: "https://pkg.go.dev/sync#Once",
+            type: "docs",
+          },
+        ],
+        estimatedMinutes: 40,
+      },
+      {
+        id: "structural-patterns",
+        title: "Structural Patterns",
+        description:
+          "Learn Adapter, Decorator, and Composite patterns — using Go interfaces and embedding for clean composition.",
+        content: `## Structural Patterns
+
+Structural patterns deal with how types are composed to form larger structures. Go's implicit interfaces and struct embedding make these patterns elegant.
+
+---
+
+### Adapter Pattern
+
+An adapter wraps one interface to satisfy another. This is extremely common in Go — you adapt third-party libraries to fit your application's interfaces.
+
+\`\`\`go
+package main
+
+import "fmt"
+
+// Your application's interface
+type Logger interface {
+    Log(level, message string)
+}
+
+// Third-party logger with a different API
+type ZapLogger struct{}
+
+func (z *ZapLogger) Info(msg string, fields ...string) {
+    fmt.Printf("[ZAP INFO] %s %v\\n", msg, fields)
+}
+
+func (z *ZapLogger) Error(msg string, fields ...string) {
+    fmt.Printf("[ZAP ERROR] %s %v\\n", msg, fields)
+}
+
+// Adapter — wraps ZapLogger to satisfy our Logger interface
+type ZapAdapter struct {
+    zap *ZapLogger
+}
+
+func (a *ZapAdapter) Log(level, message string) {
+    switch level {
+    case "error":
+        a.zap.Error(message)
+    default:
+        a.zap.Info(message)
+    }
+}
+
+func NewLogger() Logger {
+    return &ZapAdapter{zap: &ZapLogger{}}
+}
+
+func main() {
+    logger := NewLogger()
+    logger.Log("info", "server started")
+    logger.Log("error", "connection failed")
+}
+\`\`\`
+
+**When to use:** When you need to integrate a library whose API doesn't match your interfaces, or when wrapping external dependencies so they can be swapped out later.
+
+---
+
+### Decorator Pattern (Middleware)
+
+In Go, the decorator pattern is most commonly seen as **middleware** — functions that wrap other functions to add behavior.
+
+\`\`\`go
+package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+    "time"
+)
+
+// Middleware type: takes a handler, returns a handler
+type Middleware func(http.Handler) http.Handler
+
+// Logging middleware
+func WithLogging(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        next.ServeHTTP(w, r)
+        log.Printf("%s %s %v", r.Method, r.URL.Path, time.Since(start))
+    })
+}
+
+// Authentication middleware
+func WithAuth(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        token := r.Header.Get("Authorization")
+        if token == "" {
+            http.Error(w, "unauthorized", http.StatusUnauthorized)
+            return
+        }
+        next.ServeHTTP(w, r)
+    })
+}
+
+// Recovery middleware — catches panics
+func WithRecovery(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        defer func() {
+            if err := recover(); err != nil {
+                log.Printf("panic recovered: %v", err)
+                http.Error(w, "internal error", 500)
+            }
+        }()
+        next.ServeHTTP(w, r)
+    })
+}
+
+// Chain applies middleware in order (outermost first)
+func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
+    for i := len(middlewares) - 1; i >= 0; i-- {
+        h = middlewares[i](h)
+    }
+    return h
+}
+
+func main() {
+    hello := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintln(w, "Hello, World!")
+    })
+
+    // Stack middleware: Recovery → Logging → Auth → Handler
+    handler := Chain(hello, WithRecovery, WithLogging, WithAuth)
+
+    http.ListenAndServe(":8080", handler)
+}
+\`\`\`
+
+**When to use:** To add cross-cutting concerns (logging, auth, rate limiting, tracing) without modifying the core handler.
+
+---
+
+### Composite Pattern
+
+Composite lets you treat individual objects and compositions uniformly through a shared interface.
+
+\`\`\`go
+package main
+
+import "fmt"
+
+type FileSystemEntry interface {
+    Name() string
+    Size() int64
+    Print(indent string)
+}
+
+// Leaf
+type File struct {
+    name string
+    size int64
+}
+
+func (f *File) Name() string        { return f.name }
+func (f *File) Size() int64         { return f.size }
+func (f *File) Print(indent string) { fmt.Printf("%s📄 %s (%d bytes)\\n", indent, f.name, f.size) }
+
+// Composite
+type Directory struct {
+    name     string
+    children []FileSystemEntry
+}
+
+func (d *Directory) Name() string { return d.name }
+func (d *Directory) Size() int64 {
+    var total int64
+    for _, child := range d.children {
+        total += child.Size()
+    }
+    return total
+}
+func (d *Directory) Print(indent string) {
+    fmt.Printf("%s📁 %s/ (%d bytes)\\n", indent, d.name, d.Size())
+    for _, child := range d.children {
+        child.Print(indent + "  ")
+    }
+}
+func (d *Directory) Add(entry FileSystemEntry) { d.children = append(d.children, entry) }
+
+func main() {
+    root := &Directory{name: "project"}
+    src := &Directory{name: "src"}
+    src.Add(&File{name: "main.go", size: 1200})
+    src.Add(&File{name: "handler.go", size: 800})
+    root.Add(src)
+    root.Add(&File{name: "go.mod", size: 150})
+
+    root.Print("")
+}
+\`\`\`
+
+**When to use:** When you have tree-like structures where leaves and branches should be treated uniformly (file systems, UI components, org charts).`,
+        challenge:
+          "Build a middleware stack for an HTTP server: Create `WithRateLimit(requestsPerMinute int)` middleware that tracks requests per IP using a map. Create `WithCORS(allowedOrigins []string)` middleware. Chain them together with logging and serve a simple JSON API endpoint.",
+        challengeHint:
+          "For rate limiting, use a `map[string][]time.Time` to track request timestamps per IP. Clean up old entries on each request. For CORS, set `Access-Control-Allow-Origin` and `Access-Control-Allow-Methods` headers. Use the Chain function from the lesson to compose them.",
+        resources: [
+          {
+            title: "Adapter Pattern in Go",
+            url: "https://refactoring.guru/design-patterns/adapter/go/example",
+            type: "article",
+          },
+          {
+            title: "Writing HTTP Middleware in Go",
+            url: "https://go.dev/blog/middleware",
+            type: "article",
+          },
+          {
+            title: "Decorator Pattern in Go",
+            url: "https://refactoring.guru/design-patterns/decorator/go/example",
+            type: "article",
+          },
+        ],
+        estimatedMinutes: 45,
+      },
+      {
+        id: "behavioral-patterns",
+        title: "Behavioral Patterns",
+        description:
+          "Master Strategy, Observer, and Command patterns — leveraging Go's first-class functions and channels.",
+        content: `## Behavioral Patterns
+
+Behavioral patterns define how objects interact and communicate. Go's first-class functions and channels make many of these patterns concise and idiomatic.
+
+---
+
+### Strategy Pattern
+
+In classic OOP, Strategy requires an interface with multiple concrete implementations. In Go, you can often just use a function type.
+
+\`\`\`go
+package main
+
+import (
+    "fmt"
+    "sort"
+    "strings"
+)
+
+// Strategy as a function type
+type SortStrategy func([]string) []string
+
+// Concrete strategies
+func AlphabeticalSort(items []string) []string {
+    sorted := make([]string, len(items))
+    copy(sorted, items)
+    sort.Strings(sorted)
+    return sorted
+}
+
+func ByLengthSort(items []string) []string {
+    sorted := make([]string, len(items))
+    copy(sorted, items)
+    sort.Slice(sorted, func(i, j int) bool {
+        return len(sorted[i]) < len(sorted[j])
+    })
+    return sorted
+}
+
+func ReverseAlphabeticalSort(items []string) []string {
+    sorted := AlphabeticalSort(items)
+    for i, j := 0, len(sorted)-1; i < j; i, j = i+1, j-1 {
+        sorted[i], sorted[j] = sorted[j], sorted[i]
+    }
+    return sorted
+}
+
+// Context that uses the strategy
+type ItemList struct {
+    items    []string
+    strategy SortStrategy
+}
+
+func (l *ItemList) SetStrategy(s SortStrategy) {
+    l.strategy = s
+}
+
+func (l *ItemList) Display() {
+    sorted := l.strategy(l.items)
+    fmt.Println(strings.Join(sorted, ", "))
+}
+
+func main() {
+    list := &ItemList{
+        items:    []string{"banana", "apple", "kiwi", "cherry", "date"},
+        strategy: AlphabeticalSort,
+    }
+
+    fmt.Print("Alphabetical: ")
+    list.Display()
+
+    list.SetStrategy(ByLengthSort)
+    fmt.Print("By length:    ")
+    list.Display()
+
+    list.SetStrategy(ReverseAlphabeticalSort)
+    fmt.Print("Reverse:      ")
+    list.Display()
+}
+\`\`\`
+
+**Key insight:** In Go, if your strategy is a single method, just use a \`func\` type. No need for an interface with one method.
+
+---
+
+### Observer Pattern
+
+The Observer pattern lets objects subscribe to events. In Go, channels provide a natural mechanism for this.
+
+\`\`\`go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+type Event struct {
+    Type    string
+    Payload interface{}
+}
+
+type EventBus struct {
+    mu          sync.RWMutex
+    subscribers map[string][]chan Event
+}
+
+func NewEventBus() *EventBus {
+    return &EventBus{
+        subscribers: make(map[string][]chan Event),
+    }
+}
+
+func (eb *EventBus) Subscribe(eventType string) <-chan Event {
+    ch := make(chan Event, 10) // buffered to prevent blocking
+    eb.mu.Lock()
+    eb.subscribers[eventType] = append(eb.subscribers[eventType], ch)
+    eb.mu.Unlock()
+    return ch
+}
+
+func (eb *EventBus) Publish(event Event) {
+    eb.mu.RLock()
+    defer eb.mu.RUnlock()
+    for _, ch := range eb.subscribers[event.Type] {
+        // Non-blocking send
+        select {
+        case ch <- event:
+        default:
+            fmt.Printf("subscriber channel full, dropping event: %s\\n", event.Type)
+        }
+    }
+}
+
+func (eb *EventBus) Close() {
+    eb.mu.Lock()
+    defer eb.mu.Unlock()
+    for _, subs := range eb.subscribers {
+        for _, ch := range subs {
+            close(ch)
+        }
+    }
+}
+
+func main() {
+    bus := NewEventBus()
+
+    // Subscriber 1: listens for user events
+    userEvents := bus.Subscribe("user.created")
+    go func() {
+        for event := range userEvents {
+            fmt.Printf("📧 Send welcome email to: %v\\n", event.Payload)
+        }
+    }()
+
+    // Subscriber 2: also listens for user events
+    auditEvents := bus.Subscribe("user.created")
+    go func() {
+        for event := range auditEvents {
+            fmt.Printf("📝 Audit log: new user %v\\n", event.Payload)
+        }
+    }()
+
+    // Subscriber 3: listens for order events
+    orderEvents := bus.Subscribe("order.placed")
+    go func() {
+        for event := range orderEvents {
+            fmt.Printf("📦 Process order: %v\\n", event.Payload)
+        }
+    }()
+
+    // Publish events
+    bus.Publish(Event{Type: "user.created", Payload: "alice@example.com"})
+    bus.Publish(Event{Type: "user.created", Payload: "bob@example.com"})
+    bus.Publish(Event{Type: "order.placed", Payload: "order-123"})
+
+    // Give goroutines time to process (in production, use sync.WaitGroup)
+    fmt.Scanln()
+}
+\`\`\`
+
+**When to use:** Event-driven architectures, pub/sub systems, decoupling components that need to react to state changes.
+
+---
+
+### Command Pattern
+
+The Command pattern encapsulates operations as objects, enabling undo/redo, queuing, and logging.
+
+\`\`\`go
+package main
+
+import "fmt"
+
+// Command interface
+type Command interface {
+    Execute()
+    Undo()
+    Description() string
+}
+
+// Receiver
+type TextEditor struct {
+    content string
+}
+
+func (e *TextEditor) String() string { return e.content }
+
+// Concrete commands
+type InsertCommand struct {
+    editor *TextEditor
+    text   string
+    pos    int
+}
+
+func (c *InsertCommand) Execute() {
+    c.editor.content = c.editor.content[:c.pos] + c.text + c.editor.content[c.pos:]
+}
+
+func (c *InsertCommand) Undo() {
+    c.editor.content = c.editor.content[:c.pos] + c.editor.content[c.pos+len(c.text):]
+}
+
+func (c *InsertCommand) Description() string {
+    return fmt.Sprintf("Insert '%s' at position %d", c.text, c.pos)
+}
+
+// Command history for undo/redo
+type History struct {
+    commands []Command
+    current  int
+}
+
+func NewHistory() *History {
+    return &History{current: -1}
+}
+
+func (h *History) Execute(cmd Command) {
+    // Discard any undone commands
+    h.commands = h.commands[:h.current+1]
+    cmd.Execute()
+    h.commands = append(h.commands, cmd)
+    h.current++
+    fmt.Printf("  ✅ %s\\n", cmd.Description())
+}
+
+func (h *History) Undo() {
+    if h.current < 0 {
+        fmt.Println("  Nothing to undo")
+        return
+    }
+    cmd := h.commands[h.current]
+    cmd.Undo()
+    h.current--
+    fmt.Printf("  ↩️  Undo: %s\\n", cmd.Description())
+}
+
+func (h *History) Redo() {
+    if h.current+1 >= len(h.commands) {
+        fmt.Println("  Nothing to redo")
+        return
+    }
+    h.current++
+    cmd := h.commands[h.current]
+    cmd.Execute()
+    fmt.Printf("  ↪️  Redo: %s\\n", cmd.Description())
+}
+
+func main() {
+    editor := &TextEditor{}
+    history := NewHistory()
+
+    history.Execute(&InsertCommand{editor: editor, text: "Hello", pos: 0})
+    fmt.Printf("  Content: %q\\n\\n", editor)
+
+    history.Execute(&InsertCommand{editor: editor, text: ", World", pos: 5})
+    fmt.Printf("  Content: %q\\n\\n", editor)
+
+    history.Execute(&InsertCommand{editor: editor, text: "!", pos: 12})
+    fmt.Printf("  Content: %q\\n\\n", editor)
+
+    history.Undo()
+    fmt.Printf("  Content: %q\\n\\n", editor)
+
+    history.Undo()
+    fmt.Printf("  Content: %q\\n\\n", editor)
+
+    history.Redo()
+    fmt.Printf("  Content: %q\\n\\n", editor)
+}
+\`\`\`
+
+**When to use:** Undo/redo functionality, task queues, macro recording, transaction-based systems.`,
+        challenge:
+          "Build a simple task scheduler using the Command pattern: Create `PrintCommand`, `SleepCommand`, and `HTTPCommand` (simulated). Implement a `Scheduler` that queues commands and executes them in order. Add retry logic — if a command fails, retry up to 3 times before moving on.",
+        challengeHint:
+          "Add an `error` return to Execute(). The Scheduler loops through its queue, calling Execute() and retrying on error. Use a simple counter per command to track attempts.",
+        resources: [
+          {
+            title: "Strategy Pattern in Go",
+            url: "https://refactoring.guru/design-patterns/strategy/go/example",
+            type: "article",
+          },
+          {
+            title: "Observer Pattern in Go",
+            url: "https://refactoring.guru/design-patterns/observer/go/example",
+            type: "article",
+          },
+          {
+            title: "Go Channels Tutorial",
+            url: "https://go.dev/tour/concurrency/2",
+            type: "docs",
+          },
+        ],
+        estimatedMinutes: 50,
+      },
+      {
+        id: "functional-options",
+        title: "Functional Options Pattern",
+        description:
+          "Learn the idiomatic Go pattern for configurable constructors — popularized by Dave Cheney and Rob Pike.",
+        content: `## Functional Options Pattern
+
+The Functional Options pattern is one of the most distinctly "Go" patterns. It solves the problem of constructors with many optional parameters in an elegant, extensible way.
+
+### The Problem
+
+How do you create a server with many optional settings?
+
+\`\`\`go
+// Approach 1: Many parameters — confusing, what does each bool mean?
+NewServer("localhost", 8080, true, false, 30, nil, true)
+
+// Approach 2: Config struct — better, but zero values may be valid
+NewServer(Config{Host: "localhost", Port: 8080, Timeout: 30})
+// Is Timeout=0 "not set" or "no timeout"?
+
+// Approach 3: Functional Options — clean, self-documenting, extensible ✅
+NewServer("localhost", 8080,
+    WithTimeout(30 * time.Second),
+    WithTLS(certFile, keyFile),
+    WithMaxConnections(100),
+)
+\`\`\`
+
+### The Pattern
+
+\`\`\`go
+package server
+
+import (
+    "crypto/tls"
+    "log"
+    "time"
+)
+
+type Server struct {
+    host           string
+    port           int
+    timeout        time.Duration
+    maxConnections int
+    tlsConfig      *tls.Config
+    logger         *log.Logger
+}
+
+// Option is a function that configures a Server
+type Option func(*Server)
+
+// Option functions — each returns an Option
+func WithTimeout(d time.Duration) Option {
+    return func(s *Server) {
+        s.timeout = d
+    }
+}
+
+func WithMaxConnections(n int) Option {
+    return func(s *Server) {
+        s.maxConnections = n
+    }
+}
+
+func WithTLS(certFile, keyFile string) Option {
+    return func(s *Server) {
+        cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+        if err != nil {
+            log.Fatalf("failed to load TLS cert: %v", err)
+        }
+        s.tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+    }
+}
+
+func WithLogger(l *log.Logger) Option {
+    return func(s *Server) {
+        s.logger = l
+    }
+}
+
+// NewServer creates a server with sensible defaults and applies options
+func NewServer(host string, port int, opts ...Option) *Server {
+    // Start with defaults
+    s := &Server{
+        host:           host,
+        port:           port,
+        timeout:        30 * time.Second,
+        maxConnections: 100,
+        logger:         log.Default(),
+    }
+
+    // Apply each option
+    for _, opt := range opts {
+        opt(s)
+    }
+
+    return s
+}
+\`\`\`
+
+### Usage
+
+\`\`\`go
+func main() {
+    // Simple — just defaults
+    s1 := server.NewServer("localhost", 8080)
+
+    // Customized
+    s2 := server.NewServer("0.0.0.0", 443,
+        server.WithTimeout(60 * time.Second),
+        server.WithMaxConnections(1000),
+        server.WithTLS("cert.pem", "key.pem"),
+    )
+
+    // Preset configurations
+    devDefaults := []server.Option{
+        server.WithTimeout(5 * time.Second),
+        server.WithMaxConnections(10),
+    }
+    s3 := server.NewServer("localhost", 3000, devDefaults...)
+}
+\`\`\`
+
+### Why This Pattern Wins
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Self-documenting** | \`WithTimeout(30s)\` is clearer than a positional \`30\` |
+| **Backwards-compatible** | Adding new options doesn't break existing callers |
+| **Composable** | Options can be grouped into presets |
+| **Defaults are explicit** | Set in the constructor, overridden by options |
+| **Validation** | Each option function can validate its input |
+
+### Advanced: Options with Validation
+
+\`\`\`go
+// Option that can fail
+type OptionErr func(*Server) error
+
+func WithPort(port int) OptionErr {
+    return func(s *Server) error {
+        if port < 1 || port > 65535 {
+            return fmt.Errorf("invalid port: %d", port)
+        }
+        s.port = port
+        return nil
+    }
+}
+
+func NewServerSafe(host string, opts ...OptionErr) (*Server, error) {
+    s := &Server{host: host, port: 8080}
+    for _, opt := range opts {
+        if err := opt(s); err != nil {
+            return nil, err
+        }
+    }
+    return s, nil
+}
+\`\`\`
+
+### Real-World Usage
+
+This pattern is used extensively in the Go ecosystem:
+- \`google.golang.org/grpc\` — \`grpc.NewServer(opts...)\`
+- \`go.uber.org/zap\` — \`zap.New(core, opts...)\`
+- \`net/http\` — \`http.Server{}\` uses struct approach, but many wrappers add options`,
+        challenge:
+          "Create a `Database` connection builder using functional options: `NewDatabase(dsn string, opts ...Option)`. Options should include `WithMaxIdleConns(n int)`, `WithMaxOpenConns(n int)`, `WithConnMaxLifetime(d time.Duration)`, `WithRetry(attempts int, delay time.Duration)`, and `WithLogger(logger *log.Logger)`. Add validation in each option. Write a test that creates a Database with different option combinations.",
+        challengeHint:
+          "Follow the pattern exactly: define `type Option func(*Database)`, create With* functions that return Option, set defaults in NewDatabase, then loop over opts to apply them. For validation, you can either panic (simple) or switch to the OptionErr variant and return errors.",
+        resources: [
+          {
+            title: "Dave Cheney — Functional Options for Friendly APIs",
+            url: "https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis",
+            type: "article",
+          },
+          {
+            title: "Rob Pike — Self-referential Functions and the Design of Options",
+            url: "https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design-of.html",
+            type: "article",
+          },
+          {
+            title: "Uber Go Style Guide — Functional Options",
+            url: "https://github.com/uber-go/guide/blob/master/style.md#functional-options",
+            type: "github",
+          },
+        ],
+        estimatedMinutes: 35,
+      },
+      {
+        id: "concurrency-patterns",
+        title: "Concurrency Patterns",
+        description:
+          "Master Pipeline, Fan-out/Fan-in, and Worker Pool patterns — the backbone of concurrent Go programs.",
+        content: `## Concurrency Patterns
+
+Go's goroutines and channels enable powerful concurrency patterns. These patterns are the building blocks of high-performance Go applications.
+
+---
+
+### Pipeline Pattern
+
+A pipeline is a series of stages connected by channels. Each stage receives values from upstream, processes them, and sends results downstream.
+
+\`\`\`go
+package main
+
+import "fmt"
+
+// Stage 1: Generate numbers
+func generate(nums ...int) <-chan int {
+    out := make(chan int)
+    go func() {
+        for _, n := range nums {
+            out <- n
+        }
+        close(out)
+    }()
+    return out
+}
+
+// Stage 2: Square each number
+func square(in <-chan int) <-chan int {
+    out := make(chan int)
+    go func() {
+        for n := range in {
+            out <- n * n
+        }
+        close(out)
+    }()
+    return out
+}
+
+// Stage 3: Filter — only pass even numbers
+func filterEven(in <-chan int) <-chan int {
+    out := make(chan int)
+    go func() {
+        for n := range in {
+            if n%2 == 0 {
+                out <- n
+            }
+        }
+        close(out)
+    }()
+    return out
+}
+
+func main() {
+    // Build pipeline: generate → square → filter
+    ch := filterEven(square(generate(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)))
+
+    for result := range ch {
+        fmt.Println(result) // 4, 16, 36, 64, 100
+    }
+}
+\`\`\`
+
+**Key rules:**
+- Each stage runs in its own goroutine
+- The producer closes the channel when done
+- Consumers range over the channel
+
+---
+
+### Fan-out / Fan-in
+
+**Fan-out:** Multiple goroutines read from the same channel to parallelize work.
+**Fan-in:** Multiple channels are merged into a single channel.
+
+\`\`\`go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "sync"
+    "time"
+)
+
+// Simulate an expensive operation
+func processItem(id int) string {
+    duration := time.Duration(rand.Intn(500)) * time.Millisecond
+    time.Sleep(duration)
+    return fmt.Sprintf("item-%d (took %v)", id, duration)
+}
+
+// Fan-out: start N workers reading from the same channel
+func fanOut(jobs <-chan int, numWorkers int) []<-chan string {
+    workers := make([]<-chan string, numWorkers)
+    for i := 0; i < numWorkers; i++ {
+        workers[i] = worker(i, jobs)
+    }
+    return workers
+}
+
+func worker(id int, jobs <-chan int) <-chan string {
+    results := make(chan string)
+    go func() {
+        defer close(results)
+        for job := range jobs {
+            results <- fmt.Sprintf("[worker %d] %s", id, processItem(job))
+        }
+    }()
+    return results
+}
+
+// Fan-in: merge multiple channels into one
+func fanIn(channels ...<-chan string) <-chan string {
+    merged := make(chan string)
+    var wg sync.WaitGroup
+
+    for _, ch := range channels {
+        wg.Add(1)
+        go func(c <-chan string) {
+            defer wg.Done()
+            for val := range c {
+                merged <- val
+            }
+        }(ch)
+    }
+
+    go func() {
+        wg.Wait()
+        close(merged)
+    }()
+
+    return merged
+}
+
+func main() {
+    // Create 20 jobs
+    jobs := make(chan int, 20)
+    go func() {
+        for i := 1; i <= 20; i++ {
+            jobs <- i
+        }
+        close(jobs)
+    }()
+
+    // Fan-out to 4 workers, then fan-in results
+    workers := fanOut(jobs, 4)
+    results := fanIn(workers...)
+
+    for result := range results {
+        fmt.Println(result)
+    }
+}
+\`\`\`
+
+---
+
+### Worker Pool Pattern
+
+A worker pool limits the number of concurrent goroutines processing tasks.
+
+\`\`\`go
+package main
+
+import (
+    "context"
+    "fmt"
+    "sync"
+    "time"
+)
+
+type Job struct {
+    ID      int
+    Payload string
+}
+
+type Result struct {
+    JobID    int
+    Output   string
+    Duration time.Duration
+}
+
+func WorkerPool(ctx context.Context, numWorkers int, jobs <-chan Job) <-chan Result {
+    results := make(chan Result)
+    var wg sync.WaitGroup
+
+    for i := 0; i < numWorkers; i++ {
+        wg.Add(1)
+        go func(workerID int) {
+            defer wg.Done()
+            for {
+                select {
+                case job, ok := <-jobs:
+                    if !ok {
+                        return // channel closed
+                    }
+                    start := time.Now()
+                    // Simulate work
+                    time.Sleep(100 * time.Millisecond)
+                    output := fmt.Sprintf("worker %d processed: %s", workerID, job.Payload)
+
+                    results <- Result{
+                        JobID:    job.ID,
+                        Output:   output,
+                        Duration: time.Since(start),
+                    }
+                case <-ctx.Done():
+                    return // context cancelled
+                }
+            }
+        }(i)
+    }
+
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+
+    return results
+}
+
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    jobs := make(chan Job, 10)
+    go func() {
+        for i := 1; i <= 10; i++ {
+            jobs <- Job{ID: i, Payload: fmt.Sprintf("task-%d", i)}
+        }
+        close(jobs)
+    }()
+
+    results := WorkerPool(ctx, 3, jobs)
+
+    for result := range results {
+        fmt.Printf("Job %d: %s (%v)\\n", result.JobID, result.Output, result.Duration)
+    }
+}
+\`\`\`
+
+### When to Use Each Pattern
+
+| Pattern | Use Case |
+|---------|----------|
+| **Pipeline** | Sequential data transformations (ETL, stream processing) |
+| **Fan-out/Fan-in** | Parallelize independent operations (batch API calls) |
+| **Worker Pool** | Limit concurrency (database connections, rate-limited APIs) |`,
+        challenge:
+          "Build an image processing pipeline (simulated): Stage 1 generates file paths. Stage 2 fans out to 4 workers that 'resize' images (simulate with a sleep and string transform). Stage 3 fans results into a single channel. Stage 4 'uploads' results. Add context cancellation so the pipeline can be stopped mid-way. Print the total processing time.",
+        challengeHint:
+          "Use `context.WithCancel()` and pass the context to each stage. In each goroutine, use `select` with `<-ctx.Done()` to check for cancellation. Measure total time with `time.Since(start)` in main.",
+        resources: [
+          {
+            title: "Go Blog — Pipelines and Cancellation",
+            url: "https://go.dev/blog/pipelines",
+            type: "article",
+          },
+          {
+            title: "Go Concurrency Patterns (Rob Pike talk)",
+            url: "https://www.youtube.com/watch?v=f6kdp27TYZs",
+            type: "video",
+          },
+          {
+            title: "Go by Example — Worker Pools",
+            url: "https://gobyexample.com/worker-pools",
+            type: "article",
+          },
+        ],
+        estimatedMinutes: 55,
+      },
+      {
+        id: "repository-di-patterns",
+        title: "Repository & Dependency Injection",
+        description:
+          "Learn how to structure Go applications with the Repository pattern and dependency injection for testable, maintainable code.",
+        content: `## Repository & Dependency Injection Patterns
+
+These patterns help you build applications that are easy to test, maintain, and extend.
+
+---
+
+### Repository Pattern
+
+The Repository pattern abstracts data access behind an interface, separating business logic from storage details.
+
+\`\`\`go
+package main
+
+import (
+    "errors"
+    "fmt"
+    "sync"
+    "time"
+)
+
+// Domain model
+type User struct {
+    ID        string
+    Email     string
+    Name      string
+    CreatedAt time.Time
+}
+
+// Repository interface — defines WHAT operations are available
+type UserRepository interface {
+    Create(user *User) error
+    GetByID(id string) (*User, error)
+    GetByEmail(email string) (*User, error)
+    Update(user *User) error
+    Delete(id string) error
+    List() ([]*User, error)
+}
+
+// In-memory implementation — useful for tests and prototyping
+type InMemoryUserRepo struct {
+    mu    sync.RWMutex
+    users map[string]*User
+}
+
+func NewInMemoryUserRepo() *InMemoryUserRepo {
+    return &InMemoryUserRepo{users: make(map[string]*User)}
+}
+
+func (r *InMemoryUserRepo) Create(user *User) error {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+    if _, exists := r.users[user.ID]; exists {
+        return errors.New("user already exists")
+    }
+    r.users[user.ID] = user
+    return nil
+}
+
+func (r *InMemoryUserRepo) GetByID(id string) (*User, error) {
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+    user, ok := r.users[id]
+    if !ok {
+        return nil, errors.New("user not found")
+    }
+    return user, nil
+}
+
+func (r *InMemoryUserRepo) GetByEmail(email string) (*User, error) {
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+    for _, user := range r.users {
+        if user.Email == email {
+            return user, nil
+        }
+    }
+    return nil, errors.New("user not found")
+}
+
+func (r *InMemoryUserRepo) Update(user *User) error {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+    if _, exists := r.users[user.ID]; !exists {
+        return errors.New("user not found")
+    }
+    r.users[user.ID] = user
+    return nil
+}
+
+func (r *InMemoryUserRepo) Delete(id string) error {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+    delete(r.users, id)
+    return nil
+}
+
+func (r *InMemoryUserRepo) List() ([]*User, error) {
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+    users := make([]*User, 0, len(r.users))
+    for _, u := range r.users {
+        users = append(users, u)
+    }
+    return users, nil
+}
+\`\`\`
+
+In production, you'd also have a \`PostgresUserRepo\` implementing the same interface. Your business logic doesn't change — only the wiring.
+
+---
+
+### Dependency Injection
+
+Go doesn't need a DI framework. Just pass dependencies as parameters to constructors.
+
+\`\`\`go
+// Service depends on interfaces, not concrete types
+type UserService struct {
+    repo     UserRepository
+    emailer  EmailSender
+    logger   Logger
+}
+
+// Constructor injects dependencies
+func NewUserService(repo UserRepository, emailer EmailSender, logger Logger) *UserService {
+    return &UserService{
+        repo:    repo,
+        emailer: emailer,
+        logger:  logger,
+    }
+}
+
+func (s *UserService) Register(email, name string) (*User, error) {
+    // Check for existing user
+    existing, _ := s.repo.GetByEmail(email)
+    if existing != nil {
+        return nil, fmt.Errorf("email %s already registered", email)
+    }
+
+    user := &User{
+        ID:        generateID(), // some ID generator
+        Email:     email,
+        Name:      name,
+        CreatedAt: time.Now(),
+    }
+
+    if err := s.repo.Create(user); err != nil {
+        return nil, fmt.Errorf("creating user: %w", err)
+    }
+
+    s.logger.Log("info", fmt.Sprintf("user registered: %s", email))
+    s.emailer.Send(email, "Welcome!", "Thanks for signing up, "+name)
+
+    return user, nil
+}
+\`\`\`
+
+### Wiring It All Together
+
+\`\`\`go
+func main() {
+    // Production wiring
+    db := connectToPostgres()
+    repo := postgres.NewUserRepo(db)
+    emailer := sendgrid.NewClient(os.Getenv("SENDGRID_KEY"))
+    logger := zap.NewProduction()
+
+    userService := NewUserService(repo, emailer, logger)
+
+    // Start HTTP server with userService...
+}
+
+func setupTestService() *UserService {
+    // Test wiring — swap real dependencies for fakes
+    repo := NewInMemoryUserRepo()
+    emailer := &FakeEmailer{}
+    logger := &NoopLogger{}
+
+    return NewUserService(repo, emailer, logger)
+}
+\`\`\`
+
+### Interface Segregation
+
+Keep interfaces small. Define them where they're consumed, not where they're implemented.
+
+\`\`\`go
+// ❌ Big interface — forces implementations to implement everything
+type DataStore interface {
+    CreateUser(u *User) error
+    GetUser(id string) (*User, error)
+    UpdateUser(u *User) error
+    DeleteUser(id string) error
+    CreateOrder(o *Order) error
+    GetOrder(id string) (*Order, error)
+    // ... 20 more methods
+}
+
+// ✅ Small, focused interfaces — define at the consumer
+type UserGetter interface {
+    GetUser(id string) (*User, error)
+}
+
+type UserCreator interface {
+    CreateUser(u *User) error
+}
+
+// Handler only needs what it uses
+type ProfileHandler struct {
+    users UserGetter // not the full DataStore
+}
+
+// The same concrete type can satisfy both interfaces
+type PostgresStore struct { db *sql.DB }
+func (s *PostgresStore) GetUser(id string) (*User, error) { /* ... */ }
+func (s *PostgresStore) CreateUser(u *User) error { /* ... */ }
+\`\`\`
+
+### The Key Principles
+
+1. **Depend on interfaces, not concrete types**
+2. **Define interfaces at the consumer, not the implementer**
+3. **Keep interfaces small** — 1-3 methods is ideal
+4. **Inject via constructors** — no global state, no DI frameworks
+5. **Accept interfaces, return structs**`,
+        challenge:
+          "Build a complete mini-app: Create a `TodoRepository` interface with CRUD operations. Implement `InMemoryTodoRepo` and a `TodoService` that depends on the repository interface. Add a `TodoHandler` struct that exposes HTTP endpoints (GET /todos, POST /todos, DELETE /todos/{id}). Wire everything in main() and write a test using the in-memory implementation.",
+        challengeHint:
+          "Start with the Todo struct (ID, Title, Done, CreatedAt). Define the TodoRepository interface. Implement InMemoryTodoRepo. Build TodoService with business logic. Create TodoHandler that takes a TodoService. In tests, use NewInMemoryTodoRepo() and httptest for HTTP testing.",
+        resources: [
+          {
+            title: "Go Wiki — Code Review Comments (Interfaces)",
+            url: "https://go.dev/wiki/CodeReviewComments#interfaces",
+            type: "docs",
+          },
+          {
+            title: "Accept Interfaces, Return Structs",
+            url: "https://bryanftan.medium.com/accept-interfaces-return-structs-in-go-d4cab29a301b",
+            type: "article",
+          },
+          {
+            title: "Standard Go Project Layout",
+            url: "https://github.com/golang-standards/project-layout",
+            type: "github",
+          },
+          {
+            title: "How I Structure Go Services",
+            url: "https://www.youtube.com/watch?v=MzTcsI6tn-0",
+            type: "video",
+          },
+        ],
+        estimatedMinutes: 60,
+      },
+    ],
+  },
 ];
